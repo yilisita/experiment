@@ -2,11 +2,18 @@ module test-algorithm
 
 go 1.17
 
-require github.com/hyperledger/fabric-contract-api-go v1.1.1
+require (
+	github.com/hyperledger/fabric-contract-api-go v1.1.1
+	github.com/ldsec/lattigo/v2 v2.4.0
+	github.com/yilisita/goNum v0.0.0-20211016062908-389802900fd8
+)
+
+require golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
 
 require (
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
+	github.com/chfenger/goNum v0.0.0-20191211064013-a00d841c1e7b // indirect
 	github.com/go-openapi/jsonpointer v0.19.3 // indirect
 	github.com/go-openapi/jsonreference v0.19.2 // indirect
 	github.com/go-openapi/spec v0.19.4 // indirect
@@ -23,9 +30,9 @@ require (
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
-	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297 // indirect
-	golang.org/x/sys v0.0.0-20190710143415-6ec70d6a5542 // indirect
-	golang.org/x/text v0.3.2 // indirect
+	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110 // indirect
+	golang.org/x/sys v0.0.0-20211007075335-d3039528d8ac // indirect
+	golang.org/x/text v0.3.3 // indirect
 	google.golang.org/genproto v0.0.0-20180831171423-11092d34479b // indirect
 	google.golang.org/grpc v1.23.0 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
