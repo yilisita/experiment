@@ -5,6 +5,7 @@ go 1.17
 require (
 	github.com/hyperledger/fabric-contract-api-go v1.1.1
 	github.com/ldsec/lattigo/v2 v2.4.0
+	github.com/roasbeef/go-go-gadget-paillier v0.0.0-20181009074315-14f1f86b6000
 	github.com/yilisita/goNum v0.0.0-20211016062908-389802900fd8
 )
 
