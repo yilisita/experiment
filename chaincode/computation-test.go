@@ -53,6 +53,8 @@ func decryptIntvec(n []float64) float64 {
 	return plaintext[0]
 }
 
+var intvec_zero_ciphertext = encryptIntvec(0)
+
 // PAILLIER ENCRYPTION
 var key, _ = paillier.GenerateKey(rand.Reader, 128)
 
@@ -71,10 +73,13 @@ func decrypt(cByte []byte) string {
 	}
 	return new(big.Int).SetBytes(res).String()
 }
+
 func add(xByte, yByte []byte) []byte {
 	var resByte = paillier.AddCipher(&key.PublicKey, xByte, yByte)
 	return resByte
 }
+
+var paillier_zero_ciphertext = encrypt(0)
 
 // BEGIN:LATTIGO-CKKS INITIALIZATION
 var para, _ = ckks.NewParametersFromLiteral(ckks.PN14QP438)
@@ -92,6 +97,9 @@ var encryptor = ckks.NewEncryptor(para, pk)
 var decryptor = ckks.NewDecryptor(para, sk)
 
 var evaluator = ckks.NewEvaluator(para, rlwe.EvaluationKey{Rlk: rlk})
+
+var ckks_zero_plaintext = encoder.EncodeNew([]float64{0}, para.MaxLevel(), para.DefaultScale(), para.LogSlots())
+var ckks_zero_ciphertext = encryptor.EncryptNew(ckks_zero_plaintext)
 
 // END:LATTIGO-CKKS INITIALIZATION
 
@@ -124,7 +132,7 @@ func (p *PaillierContract) GetSum(ctx contractapi.TransactionContextInterface) (
 	if len(paillier_data) == 0 {
 		return "0", nil
 	}
-	sum = paillier.Add(&key.PublicKey, paillier_data[0], big.NewInt(0).Bytes())
+	sum = paillier_zero_ciphertext
 	for _, v := range paillier_data {
 		fmt.Println(decrypt(v))
 		sum = add(sum, v)
@@ -133,7 +141,7 @@ func (p *PaillierContract) GetSum(ctx contractapi.TransactionContextInterface) (
 }
 
 func (p *PaillierContract) GetSumCKKS(ctx contractapi.TransactionContextInterface) (float64, error) {
-	var sum *ckks.Ciphertext
+	var sum = ckks_zero_ciphertext // 必须先表示出0的密文
 	for _, v := range ckks_data {
 		sum = evaluator.AddNew(sum, v)
 	}
@@ -143,8 +151,7 @@ func (p *PaillierContract) GetSumCKKS(ctx contractapi.TransactionContextInterfac
 }
 
 func (p *PaillierContract) GetSumIntvec(ctx contractapi.TransactionContextInterface) float64 {
-
-	var sum goNum.Matrix
+	var sum = goNum.NewMatrix(2, 1, intvec_zero_ciphertext)
 	for _, v := range intvec_data {
 		var tempMatrix = goNum.NewMatrix(2, 1, v)
 		sum = goNum.AddMatrix(sum, tempMatrix)
@@ -183,7 +190,6 @@ func (p *PaillierContract) ReadDataCKKS(ctx contractapi.TransactionContextInterf
 	return real(decodedRes[0]), nil
 }
 
-// 删除ledger中指定的ID数据
 func (p *PaillierContract) DeleteData(ctx contractapi.TransactionContextInterface) error {
 	paillier_data = paillier_data[0:0]
 	ckks_data = ckks_data[0:0]
