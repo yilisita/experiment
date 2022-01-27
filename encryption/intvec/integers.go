@@ -1,7 +1,9 @@
 package intvec
 
 import (
+	"fmt"
 	"math"
+	"math/big"
 	"math/rand"
 	"strconv"
 	"time"
@@ -25,31 +27,36 @@ func KeySwitch(M, c goNum.Matrix) goNum.Matrix {
 }
 
 // 将十进制数字转化为二进制字符串
-func convertToBin(num int) string {
+// counvertToBin有问题
+func convertToBin(num float64) string {
 	s := ""
 	var isNegative = false
 	if num < 0 {
 		isNegative = true
-		num = int(math.Abs(float64(num)))
+		num = math.Abs(num) // 绝对值
 	}
-	//if num == 0 {
-	//	return "0"
-	//}
 
-	// num /= 2 每次循环的时候 都将num除以2  再把结果赋值给 num
-	for ; num > 0; num /= 2 {
-		lsb := num % 2
-		// strconv.Itoa() 将数字强制性转化为字符串
-		s = strconv.Itoa(lsb) + s
-	}
-	var fill = ""
-	for i := 0; i < l-len(s); i++ {
-		fill = "0" + fill
-	}
+	numStr := strconv.FormatFloat(num, 'f', 0, 64)
+	bigNumber, _ := new(big.Int).SetString(numStr, 10)
+	// fmt.Sprintf可以返回想要的字符串, %b 将整数格式化表示,变量一定要是一个整数
+	s = fmt.Sprintf("%b", bigNumber)
+	s = fillStrLengthToL(s, l) // 填充成l = 100 位
 	if isNegative {
-		fill = "-" + fill[1:]
+		return "-" + s
 	}
-	return fill + s
+	return s
+}
+
+// 将字符串的长度填充到4
+func fillStrLengthToL(s string, L int) string {
+	var res = s
+	if len(s) < L {
+		var delt = L - len(s)
+		for i := 0; i < delt; i++ {
+			res = "0" + res
+		}
+	}
+	return res
 }
 
 func reverse(str string) string {
@@ -98,7 +105,7 @@ func GetBitVector(c goNum.Matrix) goNum.Matrix {
 		s    string
 	)
 	for _, i := range c.Data {
-		s = convertToBin(int(i))
+		s = convertToBin(i)
 		if s[0] == '-' {
 			sign = -1
 			s = "0" + s[1:]
@@ -134,8 +141,8 @@ func GetSecretKey(T goNum.Matrix) goNum.Matrix {
 	return A
 }
 
-func NearestInteger(x int) int {
-	return int((float64(x) + (w+1)/2) / w)
+func NearestInteger(x float64) float64 {
+	return math.Floor((x + (w+1)/2) / w)
 }
 
 func Decrypt(S, c goNum.Matrix) goNum.Matrix {
@@ -144,7 +151,7 @@ func Decrypt(S, c goNum.Matrix) goNum.Matrix {
 	x := make([]float64, 0)
 	var temp float64
 	for _, i := range sc.Data {
-		temp = float64(NearestInteger(int(i)))
+		temp = float64(NearestInteger(i)) // int(i)有问题
 		if temp < 0 {
 			temp = temp - 1
 		}

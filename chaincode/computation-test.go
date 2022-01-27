@@ -11,10 +11,14 @@ package chaincode
 
 import (
 	"crypto/rand"
-	"encoding/json"
+	//"encoding/json"
 	"fmt"
+	"log"
+	"math"
 	"math/big"
+	"strconv"
 	"test-algorithm/encryption/intvec"
+	"time"
 
 	paillier "github.com/roasbeef/go-go-gadget-paillier"
 
@@ -104,95 +108,259 @@ var ckks_zero_ciphertext = encryptor.EncryptNew(ckks_zero_plaintext)
 // END:LATTIGO-CKKS INITIALIZATION
 
 // 插入一个数据，插入之前对该数据进行加密
-func (p *PaillierContract) InsertData(ctx contractapi.TransactionContextInterface, id string, n int64) error {
+func InsertData(n int64) error {
 	var ciphertext = encrypt(n)
 	paillier_data = append(paillier_data, ciphertext)
 	return nil
 }
 
-func (p *PaillierContract) InsertDataIntvec(ctx contractapi.TransactionContextInterface, id string, n float64) error {
+func InsertDataIntvec(n float64) error {
 	var ciphertext = encryptIntvec(n)
 	intvec_data = append(intvec_data, ciphertext)
 	return nil
 }
 
 // Insert data encrypted with ckks schema
-func (p *PaillierContract) InsertDataCKKS(ctx contractapi.TransactionContextInterface, id string, n float64) error {
+func InsertDataCKKS(n float64) error {
 	var value = []float64{n}
 	// 编码
 	var plaintext = encoder.EncodeNew(value, para.MaxLevel(), para.DefaultScale(), para.LogSlots())
-	var ciphertext = encryptor.EncryptNew(plaintext)
+	var ciphertext = encryptor.EncryptNew(plaintext) // bug: out of bounds
 	ckks_data = append(ckks_data, ciphertext)
+	return nil
+	//----------------------------------------
+}
+
+func (p *PaillierContract) InsertNDataCKKS(ctx contractapi.TransactionContextInterface, times int, n float64) error {
+	start := time.Now()
+	for i := 0; i < times; i++ {
+		err := InsertDataCKKS(n)
+		if err != nil {
+			return err
+		}
+	}
+	end := time.Since(start).Nanoseconds()
+	var avgCost float64 = -0.001
+	if times != 0 {
+		avgCost = float64(end) / float64(times)
+	}
+
+	fmt.Println("明文求和:", float64(times)*n, "加密总用时:", end, "ns", "数据量:", times, "平均加密用时:", avgCost, "ns")
+	return nil
+}
+
+func (p *PaillierContract) InsertNData(ctx contractapi.TransactionContextInterface, times int, n int64) error {
+	start := time.Now()
+	for i := 0; i < times; i++ {
+		err := InsertData(n)
+		if err != nil {
+			return err
+		}
+	}
+	end := time.Since(start).Nanoseconds()
+	var avgCost float64 = -0.001
+	if times != 0 {
+		avgCost = float64(end) / float64(times)
+	}
+
+	fmt.Println("明文求和:", int64(times)*n, "加密总用时:", end, "ns", "数据量:", times, "平均加密用时:", avgCost, "ns")
+	return nil
+}
+
+// 一次性向临时变量中增加n个数据，每个数据都是一样的，加密方案：Int vec
+//		times：数据量
+//      n: 数据
+func (p *PaillierContract) InsertNDataIntvec(ctx contractapi.TransactionContextInterface, times int, n float64) error {
+	start := time.Now()
+	for i := 0; i < times; i++ {
+		err := InsertDataIntvec(n)
+		if err != nil {
+			return err
+		}
+	}
+	end := time.Since(start).Nanoseconds()
+	var avgCost float64 = -0.001
+	if times != 0 {
+		avgCost = float64(end) / float64(times)
+	}
+
+	fmt.Println("明文求和:", float64(times)*n, "加密总用时:", end, "ns", "数据量:", times, "平均加密用时:", avgCost, "ns")
 	return nil
 }
 
 // 返回ledger中所有密文的和，并解密结果
 func (p *PaillierContract) GetSum(ctx contractapi.TransactionContextInterface) (string, error) {
+	var length = len(paillier_data)
 	var sum []byte
 	if len(paillier_data) == 0 {
 		return "0", nil
 	}
+	var digit = len(decrypt(paillier_data[0]))
 	sum = paillier_zero_ciphertext
+	start := time.Now()
 	for _, v := range paillier_data {
-		fmt.Println(decrypt(v))
+		//fmt.Println(decrypt(v))
 		sum = add(sum, v)
 	}
-	return decrypt(sum), nil
+	var res = decrypt(sum)
+	end := time.Since(start).Nanoseconds()
+	fmt.Println("数据位数:", digit, "数据量:", length, "GetSum用时:", end, "ns", "结果:", res)
+	return res, nil
 }
 
 func (p *PaillierContract) GetSumCKKS(ctx contractapi.TransactionContextInterface) (float64, error) {
+	var length = len(ckks_data)
 	var sum = ckks_zero_ciphertext // 必须先表示出0的密文
+	start := time.Now()
 	for _, v := range ckks_data {
 		sum = evaluator.AddNew(sum, v)
 	}
 	var decryptedRes = decryptor.DecryptNew(sum)
 	var decodedRes = encoder.Decode(decryptedRes, para.LogSlots())
-	return real(decodedRes[0]), nil
+	var res = real(decodedRes[0])
+	end := time.Since(start).Nanoseconds()
+	var digit int
+	if len(ckks_data) == 0 {
+		digit = 0
+	} else {
+		var decrypted1st = decryptor.DecryptNew(ckks_data[0])
+		var decodedRes = encoder.Decode(decrypted1st, para.LogSlots())
+		digit = len(strconv.Itoa(int(math.Floor(real(decodedRes[0])))))
+	}
+	fmt.Println("数据位数:", digit, "数据量:", length, "GetSumCKKS用时:", end, "ns", "结果:", res)
+	return res, nil
 }
 
 func (p *PaillierContract) GetSumIntvec(ctx contractapi.TransactionContextInterface) float64 {
+	var length = len(intvec_data)
 	var sum = goNum.NewMatrix(2, 1, intvec_zero_ciphertext)
+	var digit int
+	if len(intvec_data) == 0 {
+		digit = 0
+	} else {
+		var res1st = int(decryptIntvec(intvec_data[0]))
+		digit = len(strconv.Itoa(res1st))
+	}
+	start := time.Now()
 	for _, v := range intvec_data {
 		var tempMatrix = goNum.NewMatrix(2, 1, v)
 		sum = goNum.AddMatrix(sum, tempMatrix)
 	}
-	return decryptIntvec(sum.Data)
-}
-func (p *PaillierContract) ReadDataIntvec(ctx contractapi.TransactionContextInterface, id string) float64 {
-	var numberJSON, err = ctx.GetStub().GetState(id)
-	if err != nil {
-		fmt.Println(err)
-		return -1
-	}
-	var numberSlice []float64
-	err = json.Unmarshal(numberJSON, &numberSlice)
-	if err != nil {
-		fmt.Println(err)
-		return -1
-	}
-	return decryptIntvec(numberSlice)
-}
-
-func (p *PaillierContract) ReadDataCKKS(ctx contractapi.TransactionContextInterface, id string) (float64, error) {
-	numberJSON, err := ctx.GetStub().GetState(id)
-	if err != nil {
-		return -1, err
-	}
-
-	var res *ckks.Ciphertext
-	err = json.Unmarshal(numberJSON, &res)
-	if err != nil {
-		return -1, err
-	}
-	fmt.Println(res)
-	var decryptedRes = decryptor.DecryptNew(res)
-	var decodedRes = encoder.Decode(decryptedRes, para.LogSlots())
-	return real(decodedRes[0]), nil
+	var res = decryptIntvec(sum.Data)
+	end := time.Since(start).Nanoseconds()
+	fmt.Println("数据位数", digit, "数据量:", length, "GetSumIntvec用时:", end, "ns", "结果:", res)
+	return res
 }
 
 func (p *PaillierContract) DeleteData(ctx contractapi.TransactionContextInterface) error {
+	log.Printf("删除所有已有数据")
 	paillier_data = paillier_data[0:0]
 	ckks_data = ckks_data[0:0]
 	intvec_data = intvec_data[0:0]
 	return nil
+}
+
+// EncryptData会根据传入的index，对该index的切片数据使用paillier加密
+// 函数执行过程中,打印：数据量，数据位数，加密总共用时，加密平均用时，明文求和
+// 将加密好的数据放入临时变量中
+func (p *PaillierContract) EncryptData(ctx contractapi.TransactionContextInterface, index int) {
+	// 复制一份原始数据，以便可以重复使用
+	var srcData = DataIndex[index]
+	var copyData = make([]int64, len(srcData))
+	copy(copyData, srcData)
+
+	// 明文求和
+	var sum int64
+	for _, v := range copyData {
+		sum += v
+	}
+
+	// 加密
+	paillier_data = paillier_data[:] // 首先清楚里面已有的数据
+	start := time.Now()
+	for _, v := range copyData {
+		paillier_data = append(paillier_data, encrypt(v))
+	}
+	end := time.Since(start).Nanoseconds()
+
+	// 数据量
+	var length = len(srcData)
+
+	// 数据位数
+	var firstEle = srcData[0]
+	var digit = len(strconv.Itoa(int(firstEle)))
+
+	// 结果统计
+	fmt.Printf("加密方案:paillier 数据量:%v 数据位数:%v 加密总用时:%vns 加密平均用时:%vns 明文求和:%v\n", length, digit, end, float64(end)/float64(length), sum)
+}
+
+// EncryptDataCKKS的功能与EncryptData相似，只不过使用的CKKS加密方案
+func (p *PaillierContract) EncryptDataCKKS(ctx contractapi.TransactionContextInterface, index int) {
+	// 复制原始数据
+	var srcData = DataIndex[index]
+	var copyData = make([]int64, len(srcData))
+	copy(copyData, srcData)
+	// 做一个类型转换，因为ckks要求float类型
+	var transformedData [][]float64
+	// 顺便做个明文求和
+	var sum int64
+	for _, v := range copyData {
+		sum += v
+		transformedData = append(transformedData, []float64{float64(v)})
+	}
+
+	// 加密
+	ckks_data = ckks_data[0:0] // 清楚原有的数据
+	start := time.Now()
+	for _, v := range transformedData {
+		var plaintext = encoder.EncodeNew(v, para.MaxLevel(), para.DefaultScale(), para.LogSlots())
+		var ciphertext = encryptor.EncryptNew(plaintext)
+		ckks_data = append(ckks_data, ciphertext)
+	}
+	end := time.Since(start).Nanoseconds()
+
+	// 数据量
+	var length = len(srcData)
+
+	// 数据位数
+	var firstEle = srcData[0]
+	var digit = len(strconv.Itoa(int(firstEle)))
+
+	// 结果统计
+	fmt.Printf("加密方案:ckks 数据量:%v 数据位数:%v 加密总用时:%vns 加密平均用时:%vns 明文求和:%v\n", length, digit, end, float64(end)/float64(length), sum)
+}
+
+// EncryptDataCKKS的功能与EncryptData相似，只不过使用的CKKS加密方案
+func (p *PaillierContract) EncryptDataIntvec(ctx contractapi.TransactionContextInterface, index int) {
+	// 复制原始数据
+	var srcData = DataIndex[index]
+	var copyData = make([]int64, len(srcData))
+	copy(copyData, srcData)
+	// 做一个类型转换，因为intvec要求float类型
+	var transformedData []float64
+	// 顺便做个明文求和
+	var sum int64
+	for _, v := range copyData {
+		sum += v
+		transformedData = append(transformedData, float64(v))
+	}
+
+	// 加密
+	intvec_data = intvec_data[0:0] // 清楚原有的数据
+	start := time.Now()
+	for _, v := range transformedData {
+		var ciphertext = encryptIntvec(v)
+		intvec_data = append(intvec_data, ciphertext) // 将加密后的数据放进去
+	}
+	end := time.Since(start).Nanoseconds()
+
+	// 数据量
+	var length = len(srcData)
+
+	// 数据位数
+	var firstEle = srcData[0]
+	var digit = len(strconv.Itoa(int(firstEle)))
+
+	// 结果统计
+	fmt.Printf("加密方案:intvec 数据量:%v 数据位数:%v 加密总用时:%vns 加密平均用时:%vns 明文求和:%v\n", length, digit, end, float64(end)/float64(length), sum)
 }
