@@ -11,6 +11,8 @@ package chaincode
 
 import (
 	"crypto/rand"
+	"encoding/json"
+
 	//"encoding/json"
 	"fmt"
 	"log"
@@ -290,8 +292,16 @@ func (p *PaillierContract) EncryptData(ctx contractapi.TransactionContextInterfa
 	var firstEle = srcData[0]
 	var digit = len(strconv.Itoa(int(firstEle)))
 
+	// 统计密文大小，使用什么指标？ byte size? or something else
+	var byteLenOfCipher = 0
+	for _, v := range paillier_data {
+		var firstEnc = len(v)
+		byteLenOfCipher += firstEnc
+	}
+	byteLenOfCipher /= len(paillier_data)
+
 	// 结果统计
-	fmt.Printf("加密方案:paillier 数据量:%v 数据位数:%v 加密总用时:%vns 加密平均用时:%vns 明文求和:%v\n", length, digit, end, float64(end)/float64(length), sum)
+	fmt.Printf("加密方案:paillier 数据量:%v 数据位数:%v 加密总用时:%vns 加密平均用时:%vns 明文求和:%v 密文平均大小:%v\n", length, digit, end, float64(end)/float64(length), sum, byteLenOfCipher)
 }
 
 // EncryptDataCKKS的功能与EncryptData相似，只不过使用的CKKS加密方案
@@ -326,8 +336,19 @@ func (p *PaillierContract) EncryptDataCKKS(ctx contractapi.TransactionContextInt
 	var firstEle = srcData[0]
 	var digit = len(strconv.Itoa(int(firstEle)))
 
+	// 密文大小
+	// in the lattigo package, only a "GetDataLen" method, which returns the length
+	// in bytes of a given ciphertext is provided for ciphertext statistics. Therefor,
+	// we caculate the size of all sorts of ciphertext in the measurement of byte.
+	var byteLenOfCipher = 0
+	for _, v := range ckks_data {
+		// v.GetDataLen(true) = v.GetDataLen(false) + 8;
+		// "8" is the bytes occupation of ciphertext.Scale
+		byteLenOfCipher = v.GetDataLen(true)
+	}
+	byteLenOfCipher /= len(ckks_data)
 	// 结果统计
-	fmt.Printf("加密方案:ckks 数据量:%v 数据位数:%v 加密总用时:%vns 加密平均用时:%vns 明文求和:%v\n", length, digit, end, float64(end)/float64(length), sum)
+	fmt.Printf("加密方案:ckks 数据量:%v 数据位数:%v 加密总用时:%vns 加密平均用时:%vns 明文求和:%v 密文平均大小:%v\n", length, digit, end, float64(end)/float64(length), sum, byteLenOfCipher)
 }
 
 // EncryptDataCKKS的功能与EncryptData相似，只不过使用的CKKS加密方案
@@ -361,6 +382,20 @@ func (p *PaillierContract) EncryptDataIntvec(ctx contractapi.TransactionContextI
 	var firstEle = srcData[0]
 	var digit = len(strconv.Itoa(int(firstEle)))
 
+	// 密文大小
+	var byteLenOfCipher = 0
+	for _, v := range intvec_data {
+		var byteLenSingle = 0
+		for _, data := range v {
+			dataJSON, err := json.Marshal(data)
+			if err != nil {
+				return
+			}
+			byteLenSingle += len(dataJSON)
+		}
+		byteLenOfCipher += byteLenSingle
+	}
+
 	// 结果统计
-	fmt.Printf("加密方案:intvec 数据量:%v 数据位数:%v 加密总用时:%vns 加密平均用时:%vns 明文求和:%v\n", length, digit, end, float64(end)/float64(length), sum)
+	fmt.Printf("加密方案:intvec 数据量:%v 数据位数:%v 加密总用时:%vns 加密平均用时:%vns 明文求和:%v 密文大小:%v\n", length, digit, end, float64(end)/float64(length), sum, byteLenOfCipher)
 }
